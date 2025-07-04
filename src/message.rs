@@ -66,11 +66,16 @@ impl Message {
         self.fields[*field_type as usize].as_ref()
     }
 
-    pub fn add_field(&mut self, field_type: FieldType, value: Bytes) -> &Self {
+    pub fn add_field(&mut self, field_type: FieldType, value: Bytes) {
         self.fields[field_type as usize] = Option::from(Field::new(field_type, value));
 
         self.raw_data = Bytes::new();
+    }
 
+    pub fn with_field(&mut self, field_type: FieldType, value: Bytes) -> &Self {
+        self.fields[field_type as usize] = Option::from(Field::new(field_type, value));
+
+        self.raw_data = Bytes::new();
         self
     }
 
