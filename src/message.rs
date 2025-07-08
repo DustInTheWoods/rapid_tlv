@@ -17,7 +17,7 @@ impl Message {
         Message {
             raw_data: Bytes::new(),
             event_type,
-            fields: std::array::from_fn(|_| None),
+            fields: [(); 256].map(|_| None),
         }
     }
 
