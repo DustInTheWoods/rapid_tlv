@@ -30,7 +30,6 @@ pub enum ErrorCode {
     WriteFailed = 0x52,
 }
 
-
 #[derive(Debug)]
 pub struct Error {
     code: ErrorCode,
@@ -39,6 +38,7 @@ pub struct Error {
 
 impl Error {
     pub fn new(code: ErrorCode, message: String) -> Error {
+        crate::rapid_error!("Error created: {:?} - {}", code, message);
         Error {
             code,
             message: message.into_bytes(),

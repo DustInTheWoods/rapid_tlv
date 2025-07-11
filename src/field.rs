@@ -3,7 +3,7 @@ use bytes::{BufMut, Bytes};
 
 pub type FieldType = u8;
 
-#[derive(Debug,Clone)]
+#[derive(Debug, Clone)]
 pub struct Field {
     field_type: FieldType,
     value: Bytes,
@@ -11,6 +11,11 @@ pub struct Field {
 
 impl Field {
     pub fn new(field_type: FieldType, value: Bytes) -> Field {
+        crate::rapid_trace!(
+            "Creating new field with type: {} and {} bytes",
+            field_type,
+            value.len()
+        );
         Field { field_type, value }
     }
 
@@ -21,8 +26,14 @@ impl Field {
     pub fn value(&self) -> &[u8] {
         &self.value
     }
-    
+
     pub fn update_value(&mut self, value: Bytes) {
+        crate::rapid_trace!(
+            "Updating field type {} value from {} bytes to {} bytes",
+            self.field_type,
+            self.value.len(),
+            value.len()
+        );
         self.value = value;
     }
 
@@ -31,6 +42,11 @@ impl Field {
     }
 
     pub fn encode(&self) -> Result<Bytes, Error> {
+        crate::rapid_trace!(
+            "Encoding field type {} with {} bytes",
+            self.field_type,
+            self.value.len()
+        );
         let mut buffer = bytes::BytesMut::with_capacity(1 + 4 + self.value.len());
 
         // write a field type
@@ -42,6 +58,11 @@ impl Field {
         // write value
         buffer.put_slice(&self.value);
 
-        Ok(buffer.freeze())
+        let result = buffer.freeze();
+        crate::rapid_trace!(
+            "Field encoded successfully, total size: {} bytes",
+            result.len()
+        );
+        Ok(result)
     }
 }

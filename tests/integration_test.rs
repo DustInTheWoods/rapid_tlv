@@ -1,19 +1,18 @@
 use bytes::Bytes;
 use rapid_tlv::{RapidTlvField, RapidTlvMessage};
 
+pub const EVT_SET: u8 = 0x10;
+pub const EVT_GET: u8 = 0x11;
+pub const EVT_DELETE: u8 = 0x12;
 
-pub const EVT_SET:      u8 = 0x10;
-pub const EVT_GET:      u8 = 0x11;
-pub const EVT_DELETE:   u8 = 0x12;
-
-pub const FIELD_KEY:    u8 = 0x01;
-pub const FIELD_VALUE:  u8 = 0x02;
-pub const FIELD_TTL:    u8 = 0x03;
-pub const FIELD_PERSIST:u8 = 0x04;
-pub const FIELD_GROUP:  u8 = 0x05;
+pub const FIELD_KEY: u8 = 0x01;
+pub const FIELD_VALUE: u8 = 0x02;
+pub const FIELD_TTL: u8 = 0x03;
+pub const FIELD_PERSIST: u8 = 0x04;
+pub const FIELD_GROUP: u8 = 0x05;
 pub const FIELD_TIMESTAMP: u8 = 0x06;
 pub const FIELD_VERSION: u8 = 0x07;
-pub const FIELD_ID:     u8 = 0x08;
+pub const FIELD_ID: u8 = 0x08;
 
 #[test]
 fn test_message_creation() {
@@ -58,7 +57,7 @@ fn test_field_manipulation() {
 
     // Try to remove a non-existent field
     let removed = msg.remove_field(FIELD_KEY);
-    assert!(removed); // remove_field always returns true in the current implementation
+    assert!(!removed); // remove_field returns false for non-existent fields
 }
 
 #[test]
@@ -105,21 +104,61 @@ fn test_error_handling() {
     assert!(result.is_err());
 
     // Incomplete message (length field says 10 bytes, but only 5 are provided)
-    // Note: The current implementation doesn't check if the actual message length
-    // matches the length specified in the header, so this test is commented out
-    // let incomplete = Bytes::from_static(&[0, 0, 0, 10, 0x01]);
-    // let result = RapidTlvMessage::parse(incomplete);
-    // assert!(result.is_err());
+    let incomplete = Bytes::from_static(&[0, 0, 0, 10, 0x01]);
+    let result = RapidTlvMessage::parse(incomplete);
+    assert!(result.is_err());
 
     // Field with invalid length (field length exceeds message length)
     let invalid_field_length = Bytes::from_static(&[
-        0, 0, 0, 10,  // Message length (10 bytes)
-        0x01,         // Event type (Set)
-        0x01,         // Field type (Key)
-        0, 0, 0, 20   // Field length (20 bytes, which exceeds message length)
+        0, 0, 0, 10,   // Message length (10 bytes)
+        0x01, // Event type (Set)
+        0x01, // Field type (Key)
+        0, 0, 0, 20, // Field length (20 bytes, which exceeds message length)
     ]);
     let result = RapidTlvMessage::parse(invalid_field_length);
     assert!(result.is_err());
+}
+
+#[test]
+fn test_length_mismatch() {
+    // Test parsing a message where the declared length doesn't match the actual length
+    // This is similar to the issue described in the problem statement
+    let message_with_length_mismatch = Bytes::from_static(&[
+        0x00, 0x00, 0x00, 0x2C, // Message length = 44 bytes (incorrect)
+        0x10, // Event type = 16
+        0x10, // Field type = 16
+        0x00, 0x00, 0x00, 0x0E, // Field length = 14
+        0x75, 0x73, 0x65, 0x72, 0x64, 0x61, 0x74, 0x61, 0x3A, 0x68, 0x61, 0x6C, 0x6C,
+        0x6F, // "userdata:hall"
+        0x11, // Field type = 17
+        0x00, 0x00, 0x00, 0x0A, // Field length = 10
+        0x48, 0x61, 0x6C, 0x6C, 0x6F, 0x20, 0x57, 0x65, 0x6C, 0x74, // "Hallo Welt"
+        0x12, // Field type = 18
+        0x00, 0x00, 0x00, 0x04, // Field length = 4
+        0x00, 0x00, 0x01, 0x2C, // Value = 300
+    ]);
+
+    let result = RapidTlvMessage::parse(message_with_length_mismatch);
+    assert!(result.is_err());
+
+    // Create the same message but with the correct length
+    let message_with_correct_length = Bytes::from_static(&[
+        0x00, 0x00, 0x00, 0x30, // Message length = 48 bytes (correct)
+        0x10, // Event type = 16
+        0x10, // Field type = 16
+        0x00, 0x00, 0x00, 0x0E, // Field length = 14
+        0x75, 0x73, 0x65, 0x72, 0x64, 0x61, 0x74, 0x61, 0x3A, 0x68, 0x61, 0x6C, 0x6C,
+        0x6F, // "userdata:hall"
+        0x11, // Field type = 17
+        0x00, 0x00, 0x00, 0x0A, // Field length = 10
+        0x48, 0x61, 0x6C, 0x6C, 0x6F, 0x20, 0x57, 0x65, 0x6C, 0x74, // "Hallo Welt"
+        0x12, // Field type = 18
+        0x00, 0x00, 0x00, 0x04, // Field length = 4
+        0x00, 0x00, 0x01, 0x2C, // Value = 300
+    ]);
+
+    let result = RapidTlvMessage::parse(message_with_correct_length);
+    assert!(result.is_ok());
 }
 
 #[test]
@@ -169,11 +208,7 @@ fn test_edge_cases() {
 #[test]
 fn test_event_type_conversion() {
     // Test all event types can be converted to u8 and back
-    let event_types = [
-        EVT_SET,
-        EVT_GET,
-        EVT_DELETE,
-    ];
+    let event_types = [EVT_SET, EVT_GET, EVT_DELETE];
 
     for event_type in event_types.iter() {
         // Create a message with this event type
@@ -297,5 +332,5 @@ fn test_protocol_compliance() {
     assert_eq!(field_len, b"test_key".len());
 
     // 5. The next bytes should be the field value
-    assert_eq!(&encoded[10..10+field_len], b"test_key");
+    assert_eq!(&encoded[10..10 + field_len], b"test_key");
 }

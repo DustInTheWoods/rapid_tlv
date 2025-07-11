@@ -14,6 +14,7 @@ pub struct Message {
 
 impl Message {
     pub fn new(event_type: EventType) -> Message {
+        crate::rapid_debug!("Creating new message with event_type: {}", event_type);
         Message {
             raw_data: Bytes::new(),
             event_type,
@@ -22,10 +23,29 @@ impl Message {
     }
 
     pub fn parse(raw: Bytes) -> Result<Message, Error> {
+        crate::rapid_debug!("Parsing message from {} bytes", raw.len());
         if raw.len() < 5 {
+            crate::rapid_warn!(
+                "Message parsing failed: Not enough data for TLV header (only {} bytes)",
+                raw.len()
+            );
             return Err(Error::new(
                 ErrorCode::Malformed,
                 "Not enough data for TLV header".into(),
+            ));
+        }
+
+        // Check if the declared message length matches the actual length
+        let declared_length = u32::from_be_bytes(raw[0..4].try_into().unwrap()) as usize;
+        if declared_length != raw.len() {
+            crate::rapid_warn!(
+                "Message parsing failed: Declared length ({}) doesn't match actual length ({})",
+                declared_length,
+                raw.len()
+            );
+            return Err(Error::new(
+                ErrorCode::Malformed,
+                "Malformed tlv field: Declared length doesn't match actual length".into(),
             ));
         }
 
@@ -45,6 +65,12 @@ impl Message {
             offset += 4;
 
             if offset + length > raw.len() {
+                crate::rapid_warn!(
+                    "Message parsing failed: Not enough data for field value (offset: {}, length: {}, total: {})",
+                    offset,
+                    length,
+                    raw.len()
+                );
                 return Err(Error::new(
                     ErrorCode::Malformed,
                     "Not enough data for field value".into(),
@@ -59,6 +85,11 @@ impl Message {
 
         msg.raw_data = raw;
 
+        crate::rapid_debug!(
+            "Message parsing completed successfully with event_type: {} and {} fields",
+            msg.event_type,
+            msg.fields.iter().filter(|f| f.is_some()).count()
+        );
         Ok(msg)
     }
 
@@ -67,12 +98,22 @@ impl Message {
     }
 
     pub fn add_field(&mut self, field_type: FieldType, value: Bytes) {
+        crate::rapid_debug!(
+            "Adding field type {} with {} bytes to message",
+            field_type,
+            value.len()
+        );
         self.fields[field_type as usize] = Option::from(Field::new(field_type, value));
 
         self.raw_data = Bytes::new();
     }
 
     pub fn with_field(mut self, field_type: FieldType, value: Bytes) -> Self {
+        crate::rapid_debug!(
+            "Adding field type {} with {} bytes to message (builder style)",
+            field_type,
+            value.len()
+        );
         self.fields[field_type as usize] = Option::from(Field::new(field_type, value));
 
         self.raw_data = Bytes::new();
@@ -80,13 +121,16 @@ impl Message {
     }
 
     pub fn remove_field(&mut self, field_type: FieldType) -> bool {
+        crate::rapid_debug!("Removing field type {} from message", field_type);
+        let had_field = self.fields[field_type as usize].is_some();
         self.fields[field_type as usize] = None;
 
         self.raw_data = Bytes::new();
-        true
+        had_field
     }
 
     pub fn encode(&mut self) -> Result<&[u8], Error> {
+        crate::rapid_debug!("Encoding message with event_type: {}", self.event_type);
         // Only rebuild raw_data if it has been modified or is empty
         if self.raw_data.is_empty() {
             let mut buffer_len = 5; //  length 4 bytes + event_type 1 byte
@@ -111,6 +155,10 @@ impl Message {
             }
 
             self.raw_data = buffer.freeze(); // Bytes ist nun immutable view
+            crate::rapid_debug!(
+                "Message encoded successfully, total size: {} bytes",
+                self.raw_data.len()
+            );
         }
 
         Ok(self.raw_data.as_ref())
